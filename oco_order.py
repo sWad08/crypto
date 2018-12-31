@@ -9,8 +9,8 @@ api_key = api_key_1['api_key']
 api_secret = api_key_1['api_secret']
 
 # Define trade parameters
-SYMBOL = 'BNBBTC'
 ASSET = 'BNB'
+BASE = 'BTC'
 TARGETPRICE_1 = 0.001753
 
 # Define code parameters
@@ -19,7 +19,7 @@ COUNTERMAX = 20
 
 # Starting the script
 
-
+symbol = ASSET + BASE
 # Create client connection to binance by using the User keys
 client = Client(api_key, api_secret)
 
@@ -61,8 +61,7 @@ while counter < COUNTERMAX:
     for asset in prices_binanceclient:
         prices[asset['symbol']]=asset['price']
 
-    #price = pd.DataFrame(prices)
-    price = float(prices[SYMBOL])
+    price = float(prices[symbol])
 
     msg = "current price: "+str(price)
 
