@@ -38,6 +38,7 @@ print("Free balance: "+str(free_balance))
 print("Locked balance: "+str(locked_balance))
 print("Total balance: "+str(total_balance))
 
+
 print("--- Starting price monitoring ---")
 
 # Run a continuous loop to check on price and execute (something)
@@ -54,10 +55,10 @@ while counter < COUNTERMAX:
     # Get all prices using exchange package
     prices_binanceclient = client.get_all_tickers()
 
-    # Defining an empty dict for prices
+    # Define an empty dict for prices
     prices={}
 
-    # Converting binance response into the prices dict
+    # Convert binance response into the prices dict
     for asset in prices_binanceclient:
         prices[asset['symbol']]=asset['price']
 
@@ -67,7 +68,7 @@ while counter < COUNTERMAX:
 
     # If price reaches target, place market sell order
     if price >= TARGETPRICE_1 :
-        print(msg+'-> SELL!')
+        print(msg+' -> SELL!')
         # Currently limit buy for test purposes
         # order = client.order_limit_buy(
         #     symbol = symbol,
@@ -75,6 +76,6 @@ while counter < COUNTERMAX:
         #     price = '0.000100'
         # )
     else :
-        print(msg+'-> HODL!')
+        print(msg+' -> HODL!')
 
 
