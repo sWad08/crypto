@@ -10,7 +10,8 @@ api_secret = api_key_1['api_secret']
 # Define trade parameters
 ASSET = 'BNB'
 BASE = 'BTC'
-TARGETPRICE_1 = 0.0015700
+TARGETPRICE_1 = 0.0015500
+QUANTITY = 45
 
 # Define the maximum number of cycles for the code to run
 COUNTERMAX = 20
@@ -30,7 +31,7 @@ tt = time.gmtime(int((gt["serverTime"])/1000))
 win32api.SetSystemTime(tt[0],tt[1],0,tt[2],tt[3],tt[4],tt[5],0)
 
 # Query ASSET balance
-print("--- "+ASSET+" on Binance ---")
+print(ASSET+" on Binance")
 balance = client.get_asset_balance(asset = ASSET)
 free_balance = float(balance['free'])
 locked_balance = float(balance['locked'])
@@ -39,10 +40,11 @@ print("Free balance: "+str(free_balance))
 print("Locked balance: "+str(locked_balance))
 print("Total balance: "+str(total_balance))
 
-# Start price monitoring
-print("--- Starting price monitoring ---")
+# Initialize price monitoring
+print("")
+print("Initializing price monitoring")
 
-# Run a continuous loop to check on price and execute (something)
+# Run a continuous loop to monitor price and execute OCO order functionality if applicable
 #while total_balance != 0:
 
 # Create a counter to control infinite while loops
@@ -51,20 +53,21 @@ counter = 0
 while counter < COUNTERMAX:
 
     counter += 1
-    print("...#"+str(counter))
+    print("")
+    print("Running cycle #"+str(counter))
 
     # Get all prices using exchange package
     prices_client = client.get_all_tickers()
 
     # Define an empty dictionary for prices
-    prices={}
+    prices = {}
 
     # Convert exchange response into the prices dictionary
     for asset in prices_client:
         prices[asset['symbol']]=asset['price']
 
+    # Query price for symbol
     price = float(prices[symbol])
-
     msg = "Current price: "+str(price)
 
     # If price reaches target, place market sell order
@@ -74,13 +77,12 @@ while counter < COUNTERMAX:
 
         # Get open orders for symbol
         orders = client.get_open_orders(symbol = symbol)
-        print("Open orders:")
-        print(orders)
 
-
+        # Cancel open orders for symbol
         for order in orders:
-
-            # Cancel open orders for symbol
+            print("")
+            print("Cancelling existing orders:")
+            print(order['orderId'])
             result = client.cancel_order(
                 symbol = symbol,
                 orderId = order['orderId']
@@ -88,13 +90,17 @@ while counter < COUNTERMAX:
 
         # Place market sell order
         "Egyelőre limit buy order teszt célokból"
+        "QUANTITY-t majd lehet le kell cserélni total_balance-ra"
+        print("")
+        print("Placing market sell order")
         order = client.order_limit_buy(
             symbol = symbol,
-            quantity = 44,
+            quantity = QUANTITY,
             price = '0.0002100'
         )
 
-        print("--- Closing process ---")
+        print("")
+        print("Order placed, finishing process")
         break
 
     else :
