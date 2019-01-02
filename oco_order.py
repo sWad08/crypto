@@ -1,26 +1,38 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
 from binance.client import Client
 from api_keys import api_key_1
 import time
 import win32api
+import utils
 
 # Define API key and secret as variables
 api_key = api_key_1['api_key']
 api_secret = api_key_1['api_secret']
 
-# Define trade parameters
-ASSET = 'BNB'
-BASE = 'BTC'
-TARGETPRICE_1 = 0.0015500
-QUANTITY = 45
+# Define trade parameters in a dictionary (later this will be re-read from file for user updated config)
+trade_params = {
+    'ASSET': 'BNB',
+    'BASE': 'BTC',
+    'TARGETPRICE':    0.0017500,
+    'TRADEPRICE':     0.0002100,
+    'QUANTITY': 45,
+}
 
-# Define the maximum number of cycles for the code to run
-COUNTERMAX = 20
+utils.json_save(trade_params,'configs/trade_config.json')
+
+# Define script parameters in a dictionary (later this will be re-read from file for user updated config)
+script_params = {
+    'COUNTERMAX': 20,
+}
+utils.json_save(script_params,'configs/script_config.json')
 
 
 # Starting the script
 
 # Derive symbol from 'ASSET' and 'BASE'
-symbol = ASSET + BASE
+symbol = trade_params['ASSET'] + trade_params['BASE']
 
 # Create client connection to exchange by using API keys
 client = Client(api_key, api_secret)
@@ -28,11 +40,11 @@ client = Client(api_key, api_secret)
 # Sync system time to exchange server time - needed to bypass exchange API security requirements for synced times
 gt = client.get_server_time()
 tt = time.gmtime(int((gt["serverTime"])/1000))
-win32api.SetSystemTime(tt[0],tt[1],0,tt[2],tt[3],tt[4],tt[5],0)
+win32api.SetSystemTime(tt[0], tt[1], 0, tt[2], tt[3], tt[4], tt[5], 0)
 
 # Query ASSET balance
-print(ASSET+" on Binance")
-balance = client.get_asset_balance(asset = ASSET)
+print(trade_params['ASSET']+" on Binance")
+balance = client.get_asset_balance(asset=trade_params['ASSET'])
 free_balance = float(balance['free'])
 locked_balance = float(balance['locked'])
 total_balance = free_balance + locked_balance
@@ -50,33 +62,37 @@ print("Initializing price monitoring")
 # Create a counter to control infinite while loops
 counter = 0
 
-while counter < COUNTERMAX:
+while script_params['COUNTERMAX'] != 0:
+
+    # At each cycle we reload the config files to see if user changed anything at runtime
+    trade_params = utils.json_load('configs/trade_config.json')
+    script_params = utils.json_load('configs/script_config.json')
 
     counter += 1
+    if counter > script_params['COUNTERMAX']:
+        break
+
     print("")
     print("Running cycle #"+str(counter))
 
     # Get all prices using exchange package
     prices_client = client.get_all_tickers()
 
-    # Define an empty dictionary for prices
-    prices = {}
+    # Create a so called "list comprehension" from the original client all_ticker response
+    # The following basically takes all elements of prices_client if the 'symbol' key is equal to symbol
+    prices_asset = [x for x in prices_client if x['symbol'] == symbol]
 
-    # Convert exchange response into the prices dictionary
-    for asset in prices_client:
-        prices[asset['symbol']]=asset['price']
-
-    # Query price for symbol
-    price = float(prices[symbol])
+    # Query price from the filtered list. First element should be sufficient as we only have 1 symbol at the moment
+    price = float(prices_asset[0]['price'])
     msg = "Current price: "+str(price)
 
     # If price reaches target, place market sell order
-    if price >= TARGETPRICE_1 :
+    if price >= trade_params['TARGETPRICE']:
 
         print(msg+' -> SELL!')
 
         # Get open orders for symbol
-        orders = client.get_open_orders(symbol = symbol)
+        orders = client.get_open_orders(symbol=symbol)
 
         # Cancel open orders for symbol
         for order in orders:
@@ -84,8 +100,8 @@ while counter < COUNTERMAX:
             print("Cancelling existing orders:")
             print(order['orderId'])
             result = client.cancel_order(
-                symbol = symbol,
-                orderId = order['orderId']
+                symbol=symbol,
+                orderId=order['orderId']
             )
 
         # Place market sell order
@@ -94,9 +110,9 @@ while counter < COUNTERMAX:
         print("")
         print("Placing market sell order")
         order = client.order_limit_buy(
-            symbol = symbol,
-            quantity = QUANTITY,
-            price = '0.0002100'
+            symbol=symbol,
+            quantity=trade_params['QUANTITY'],
+            price=trade_params['TRADEPRICE'],
         )
 
         print("")
