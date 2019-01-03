@@ -16,7 +16,7 @@ def json_save(x, filepath):
     :return: does not return anything
     """
     with open(os.path.join(script_dir, filepath), 'w') as outfile:
-        json.dump(x, outfile)
+        json.dump(x, outfile, sort_keys=True, indent=4, separators=(',', ': '))
 
 
 def json_load(filepath):

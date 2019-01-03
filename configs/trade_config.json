@@ -1,1 +1,28 @@
-{"TARGETPRICE": 0.00175, "QUANTITY": 45, "BASE": "BTC", "ASSET": "BNB", "TRADEPRICE": 0.00021}
+{
+    "ASSET": [
+        "BNB",
+        "LTC",
+        "NEO"
+    ],
+    "BASE": [
+        "BTC",
+        "BTC",
+        "BTC"
+    ],
+    "QUANTITY": [
+        45,
+        45,
+        45
+    ],
+    "TARGETPRICE": [
+        0.00175,
+        0.01,
+        0.005
+    ],
+    "TRADEPRICE": [
+        0.00021,
+        0.0095,
+        0.0045
+    ],
+    "_comment": "Trade specific configs are stored here"
+}
