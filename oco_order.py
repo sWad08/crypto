@@ -11,26 +11,31 @@ import utils
 api_key = api_key_1['api_key']
 api_secret = api_key_1['api_secret']
 
-# Define trade parameters in a dictionary (later this will be re-read from file for user updated config)
-trade_params = {
-    '_comment': 'Trade specific configs are stored here',
-    'ASSET':        ['BNB', 'LTC', 'NEO'],
-    'BASE':         ['BTC', 'BTC', 'BTC'],
-    'TARGETPRICE':  [0.0017500, 0.01, 0.005],
-    'TRADEPRICE':   [0.0002100, 0.0095, 0.0045],
-    'QUANTITY':     [45, 45, 45],
-}
-# Save the initial config to file (so that user can alter config at runtime)
-utils.json_save(trade_params, 'configs/trade_config.json')
+# # Define trade parameters in a dictionary (later this will be re-read from file for user updated config)
+# trade_params = {
+#     '_comment': 'Trade specific configs are stored here',
+#     'ASSET':        ['NEBL'],
+#     'BASE':         ['BTC'],
+#     'TARGETPRICE':  [0.0003580],
+#     'TRADEPRICE':   [0.0002100],
+#     'QUANTITY':     [3],
+# }
+# # Save the initial config to file (so that user can alter config at runtime)
+# utils.json_save(trade_params, 'configs/trade_config.json')
+#
+#
+# # Define script parameters in a dictionary (later this will be re-read from file for user updated config)
+# script_params = {
+#     '_comment': 'User countermax to limit the max number of cycles, use negative number for infinite run, use shutdown=1 to force break the loop',
+#     'COUNTERMAX': 100,
+#     'SHUTDOWN': 0,
+# }
+# # Save the initial config to file (so that user can alter config at runtime)
+# utils.json_save(script_params, 'configs/script_config.json')
 
-# Define script parameters in a dictionary (later this will be re-read from file for user updated config)
-script_params = {
-    '_comment': 'User countermax to limit the max number of cycles, use negative number for infinite run, use shutdown=1 to force break the loop',
-    'COUNTERMAX': 5,
-    'SHUTDOWN': 0,
-}
-# Save the initial config to file (so that user can alter config at runtime)
-utils.json_save(script_params, 'configs/script_config.json')
+# Load the config files to define trade and script parameters
+trade_params = utils.json_load('configs/trade_config.json')
+script_params = utils.json_load('configs/script_config.json')
 
 
 # Starting the script
@@ -58,9 +63,8 @@ for asset in trade_params['ASSET']:
     print("  Total balance: "+str(total_balance))
 
 # Initialize price monitoring
-print('')
+print("")
 print("Initializing price monitoring for target prices: \n{}".format(zip(symbol,trade_params['TARGETPRICE'])))
-print('')
 
 # Run a continuous loop to monitor price and execute OCO order functionality if applicable
 # Create a counter to be able control infinite loops
@@ -74,10 +78,11 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
     trade_params = utils.json_load('configs/trade_config.json')
     script_params = utils.json_load('configs/script_config.json')
 
-    # Check if user initated a shutdown via the config file
+    # Check if user initiated a shutdown via the config file
     if script_params['SHUTDOWN'] == 1:
         break
 
+    print("")
     print("Running cycle #"+str(counter))
 
     # Get all prices using exchange package
@@ -87,21 +92,18 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
     # The following basically takes all elements of prices_client if the 'symbol' key is equal to symbol
     prices_filtered = [{'price': float(x['price']), 'symbol': str(x['symbol'])} for x in prices_client if x['symbol'] in symbol]
 
-    # Filter the above even further to check on symbols that are above their targetprice
-    symbol_above_target = [str(x['symbol']) for x in prices_filtered if x['price'] >= trade_params['TARGETPRICE'][symbol.index(x['symbol'])]]
+    # Convert exchange response into the prices dictionary
+    for asset in prices_client:
+        prices[asset['symbol']]=asset['price']
 
-    msg = "Current price(s): \n"
-    for x in prices_filtered:
-        msg += '  ' + x['symbol'] + ' = ' + str(x['price'])
-        if x['symbol'] in symbol_above_target:
-            msg += ' --->SELL!\n'
-        else:
-            msg += ' --->HODL!\n'
-
-    print(msg)
+    # Query price for symbol
+    price = float(prices[symbol])
+    msg = "Current price: "+str(price)
 
     # If price reaches target, place market sell order
-    for asset in symbol_above_target:
+    if price >= TARGETPRICE_1 :
+
+        print(msg+' -> SELL!')
 
         # Get open orders for symbol
         orders = client.get_open_orders(symbol=asset)
@@ -117,17 +119,15 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
             )
 
         # Place market sell order
-        # Egyelőre limit buy order teszt célokból
-        # QUANTITY-t majd lehet le kell cserélni total_balance-ra
+        "Egyelőre limit buy order teszt célokból"
+        "QUANTITY-t majd lehet le kell cserélni total_balance-ra"
         print("")
         print("Placing market sell order")
-        order = client.order_limit_buy(
+        order = client.order_market_sell(
             symbol=asset,
             quantity=trade_params['QUANTITY'][symbol.index(asset)],
-            price=trade_params['TRADEPRICE'][symbol.index(asset)],
         )
 
         print("")
         print("Order placed, finishing process")
         break
-
