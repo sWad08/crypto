@@ -136,7 +136,7 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
 
         # Remove the given asset from trade_params lists and overwrite config file
         # Currently asset is hard input when getting its index, has to be made dynamic
-        index = trade_params['ASSET'].index('NEBL')
+        index = symbol.index(asset)
         trade_params['ASSET'].pop(index)
         trade_params['BASE'].pop(index)
         trade_params['TARGETPRICE'].pop(index)
