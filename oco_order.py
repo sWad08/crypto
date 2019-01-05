@@ -38,6 +38,7 @@ trade_params = utils.json_load('configs/trade_config.json')
 script_params = utils.json_load('configs/script_config.json')
 
 
+
 # Starting the script
 
 # Derive symbol from 'ASSET' and 'BASE'
@@ -92,18 +93,22 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
     # The following basically takes all elements of prices_client if the 'symbol' key is equal to symbol
     prices_filtered = [{'price': float(x['price']), 'symbol': str(x['symbol'])} for x in prices_client if x['symbol'] in symbol]
 
-    # Convert exchange response into the prices dictionary
-    for asset in prices_client:
-        prices[asset['symbol']]=asset['price']
+    # Filter the above even further to check on symbols that are above their targetprice
+    symbols_above_target = [str(x['symbol']) for x in prices_filtered if x['price'] >= trade_params['TARGETPRICE'][symbol.index(x['symbol'])]]
+    print
 
-    # Query price for symbol
-    price = float(prices[symbol])
-    msg = "Current price: "+str(price)
+    msg = "Current price(s): \n"
+    for x in prices_filtered:
+        msg += '  ' + x['symbol'] + ' = ' + str(x['price'])
+        if x['symbol'] in symbols_above_target:
+            msg += ' --->SELL!\n'
+        else:
+            msg += ' --->HODL!\n'
+
+    print(msg)
 
     # If price reaches target, place market sell order
-    if price >= TARGETPRICE_1 :
-
-        print(msg+' -> SELL!')
+    for asset in symbols_above_target:
 
         # Get open orders for symbol
         orders = client.get_open_orders(symbol=asset)
@@ -119,8 +124,6 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
             )
 
         # Place market sell order
-        "Egyelőre limit buy order teszt célokból"
-        "QUANTITY-t majd lehet le kell cserélni total_balance-ra"
         print("")
         print("Placing market sell order")
         order = client.order_market_sell(
@@ -130,4 +133,15 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
 
         print("")
         print("Order placed, finishing process")
+
+        # Remove the given asset from trade_params lists and overwrite config file
+        # Currently asset is hard input when getting its index, has to be made dynamic
+        index = trade_params['ASSET'].index('NEBL')
+        trade_params['ASSET'].pop(index)
+        trade_params['BASE'].pop(index)
+        trade_params['TARGETPRICE'].pop(index)
+        trade_params['TRADEPRICE'].pop(index)
+        trade_params['QUANTITY'].pop(index)
+        utils.json_save(trade_params, 'configs/trade_config.json')
+
         break
