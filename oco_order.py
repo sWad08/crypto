@@ -14,11 +14,10 @@ api_secret = api_key_1['api_secret']
 # # Define trade parameters in a dictionary (later this will be re-read from file for user updated config)
 # trade_params = {
 #     '_comment': 'Trade specific configs are stored here',
-#     'ASSET':        ['NEBL'],
-#     'BASE':         ['BTC'],
-#     'TARGETPRICE':  [0.0003580],
-#     'TRADEPRICE':   [0.0002100],
-#     'QUANTITY':     [3],
+#     'ASSET':        ['XLM', 'SALT'],
+#     'BASE':         ['BTC', 'BTC'],
+#     'TARGETPRICE':  [0.00003030, 0.00033200],
+#     'QUANTITY':     [3, 400],
 # }
 # # Save the initial config to file (so that user can alter config at runtime)
 # utils.json_save(trade_params, 'configs/trade_config.json')
@@ -37,12 +36,7 @@ api_secret = api_key_1['api_secret']
 trade_params = utils.json_load('configs/trade_config.json')
 script_params = utils.json_load('configs/script_config.json')
 
-
-
 # Starting the script
-
-# Derive symbol from 'ASSET' and 'BASE'
-symbol = [a + b for a, b in zip(trade_params['ASSET'], trade_params['BASE'])]
 
 # Create client connection to exchange by using API keys
 client = Client(api_key, api_secret)
@@ -52,20 +46,8 @@ gt = client.get_server_time()
 tt = time.gmtime(int((gt["serverTime"])/1000))
 win32api.SetSystemTime(tt[0], tt[1], 0, tt[2], tt[3], tt[4], tt[5], 0)
 
-# Query ASSET balance
-for asset in trade_params['ASSET']:
-    print(asset+" on Binance")
-    balance = client.get_asset_balance(asset=asset)
-    free_balance = float(balance['free'])
-    locked_balance = float(balance['locked'])
-    total_balance = free_balance + locked_balance
-    print("  Free balance: "+str(free_balance))
-    print("  Locked balance: "+str(locked_balance))
-    print("  Total balance: "+str(total_balance))
-
 # Initialize price monitoring
-print("")
-print("Initializing price monitoring for target prices: \n{}".format(zip(symbol,trade_params['TARGETPRICE'])))
+print("\nInitializing price monitoring:")
 
 # Run a continuous loop to monitor price and execute OCO order functionality if applicable
 # Create a counter to be able control infinite loops
@@ -75,6 +57,8 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
 
     counter += 1
 
+    print("\nRunning cycle #"+str(counter))
+
     # At each cycle we reload the config files to see if user changed anything at runtime
     trade_params = utils.json_load('configs/trade_config.json')
     script_params = utils.json_load('configs/script_config.json')
@@ -83,8 +67,20 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
     if script_params['SHUTDOWN'] == 1:
         break
 
-    print("")
-    print("Running cycle #"+str(counter))
+    # Derive symbol from 'ASSET' and 'BASE'
+    symbol = [a + b for a, b in zip(trade_params['ASSET'], trade_params['BASE'])]
+
+    # Query asset balance
+    for asset in trade_params['ASSET']:
+        print("\n"+asset+" quantities:")
+        balance = client.get_asset_balance(asset=asset)
+        free_balance = float(balance['free'])
+        locked_balance = float(balance['locked'])
+        total_balance = free_balance + locked_balance
+        print("  Free balance = "+str(free_balance))
+        print("  Locked balance = "+str(locked_balance))
+        print("  Total balance = "+str(total_balance))
+        print("  Quantity to sell = "+str(trade_params['QUANTITY'][trade_params['ASSET'].index(asset)]))
 
     # Get all prices using exchange package
     prices_client = client.get_all_tickers()
@@ -97,17 +93,18 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
     symbols_above_target = [str(x['symbol']) for x in prices_filtered if x['price'] >= trade_params['TARGETPRICE'][symbol.index(x['symbol'])]]
     print
 
-    msg = "Current price(s): \n"
+    msg = "\nPrice comparison:\n"
     for x in prices_filtered:
-        msg += '  ' + x['symbol'] + ' = ' + str(x['price'])
+        msg += '  ' + x['symbol'] + ': Target price = ' + str(trade_params['TARGETPRICE'][symbol.index(x['symbol'])]) + ", Current price = " + str(x['price'])
         if x['symbol'] in symbols_above_target:
-            msg += ' --->SELL!\n'
+            msg += ' ---> SELL!\n'
         else:
-            msg += ' --->HODL!\n'
+            msg += ' ---> HODL!\n'
 
     print(msg)
 
     # If price reaches target, place market sell order
+    # Itt asset lecserélhető lenne symbol-ra? Úgy szerintem követhetőbb lenne.
     for asset in symbols_above_target:
 
         # Get open orders for symbol
@@ -115,8 +112,7 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
 
         # Cancel open orders for symbol
         for order in orders:
-            print("")
-            print("Cancelling existing orders:")
+            print("\nCancelling existing orders:")
             print(order['orderId'])
             result = client.cancel_order(
                 symbol=asset,
@@ -124,22 +120,21 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
             )
 
         # Place market sell order
-        print("")
-        print("Placing market sell order")
+        # quantity-t majd át kéne úgy állítani, hogy max(QUANTITY, total_balance). Csak ehhez meg kéne teremteni a kapcsolatot a symbol és az asset között.
+        print("\nPlacing market sell order")
         order = client.order_market_sell(
             symbol=asset,
-            quantity=trade_params['QUANTITY'][symbol.index(asset)],
+            quantity=['QUANTITY'][symbol.index(asset)],
         )
+        print("  Quantity = "+str(['QUANTITY'][symbol.index(asset)]))
 
-        print("")
-        print("Order placed, finishing process")
+        print("\nOrder placed, finishing process for asset(s) above target")
 
         # Remove the given asset from trade_params lists and overwrite config file
         index = symbol.index(asset)
         trade_params['ASSET'].pop(index)
         trade_params['BASE'].pop(index)
         trade_params['TARGETPRICE'].pop(index)
-        trade_params['TRADEPRICE'].pop(index)
         trade_params['QUANTITY'].pop(index)
         utils.json_save(trade_params, 'configs/trade_config.json')
 

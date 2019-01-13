@@ -1,5 +1,5 @@
 {
-    "COUNTERMAX": 5,
+    "COUNTERMAX": -1,
     "SHUTDOWN": 0,
     "_comment": "User countermax to limit the max number of cycles, use negative number for infinite run, use shutdown=1 to force break the loop"
 }

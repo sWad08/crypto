@@ -1,28 +1,23 @@
 {
     "ASSET": [
-        "BNB",
-        "LTC",
-        "NEO"
+       "XLM",
+		"SALT",
+        "ETH"
     ],
     "BASE": [
         "BTC",
-        "BTC",
+		"BTC",
         "BTC"
     ],
     "QUANTITY": [
-        45,
-        45,
-        45
+		7829,
+		400,
+        0.8
     ],
     "TARGETPRICE": [
-        0.00175,
-        0.01,
-        0.005
-    ],
-    "TRADEPRICE": [
-        0.00021,
-        0.0095,
-        0.0045
+        0.000031,
+		0.000332,
+        0.04475
     ],
     "_comment": "Trade specific configs are stored here"
 }
