@@ -1,22 +1,18 @@
 {
     "ASSET": [
-       "XLM",
-		"SALT",
+        "SALT",
         "ETH"
     ],
-    "BASE": [
-        "BTC",
-		"BTC",
-        "BTC"
-    ],
     "QUANTITY": [
-		7829,
-		400,
+        400,
         0.8
     ],
+    "SYMBOL": [
+        "SALTBTC",
+        "ETHBTC"
+    ],
     "TARGETPRICE": [
-        0.000031,
-		0.000332,
+        0.000332,
         0.04475
     ],
     "_comment": "Trade specific configs are stored here"
