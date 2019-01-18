@@ -47,7 +47,7 @@ tt = time.gmtime(int((gt["serverTime"])/1000))
 win32api.SetSystemTime(tt[0], tt[1], 0, tt[2], tt[3], tt[4], tt[5], 0)
 
 # Initialize price monitoring
-print("\nInitializing price monitoring:")
+print("\nInitializing price monitoring...")
 
 # Run a continuous loop to monitor price and execute OCO order functionality if applicable
 # Create a counter to be able control infinite loops
@@ -57,7 +57,7 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
 
     counter += 1
 
-    print("\nRunning cycle #"+str(counter))
+    print("\nRunning cycle #"+str(counter)+"...")
 
     # At each cycle we reload the config files to see if user changed anything at runtime
     trade_params = utils.json_load('configs/trade_config.json')
@@ -67,22 +67,10 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
     if script_params['SHUTDOWN'] == 1:
         break
 
-    # Query asset balance
-    for asset in trade_params['ASSET']:
-        print("\n"+asset+" quantities:")
-        balance = client.get_asset_balance(asset=asset)
-        free_balance = float(balance['free'])
-        locked_balance = float(balance['locked'])
-        total_balance = free_balance + locked_balance
-        print("  Free balance = "+str(free_balance))
-        print("  Locked balance = "+str(locked_balance))
-        print("  Total balance = "+str(total_balance))
-        print("  Quantity to sell = "+str(trade_params['QUANTITY'][trade_params['ASSET'].index(asset)]))
-
-    # Get all prices using exchange package
+    # Get all prices using exchange client
     prices_client = client.get_all_tickers()
 
-    # Create a so called "list comprehension" from the original client all_ticker response
+    # Create a so-called "list comprehension" from the original client all_ticker response
     # The following basically takes all elements of prices_client if the 'symbol' key is included in trade_params
     prices_filtered = [{'price': float(x['price']), 'symbol': str(x['symbol'])} for x in prices_client if x['symbol'] in trade_params['SYMBOL']]
 
@@ -99,38 +87,59 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
 
     print(msg)
 
-    # If price reaches target, place market sell order
+    # If price reaches target, try to place market sell order
     for symbol in symbols_above_target:
 
-        # Get open orders for symbol
-        orders = client.get_open_orders(symbol=symbol)
+        # First query asset balance to check if asset is available
+        print("\n"+trade_params['ASSET'][trade_params['SYMBOL'].index(symbol)]+" quantities:")
+        balance = client.get_asset_balance(asset=trade_params['ASSET'][trade_params['SYMBOL'].index(symbol)])
+        free_balance = float(balance['free'])
+        locked_balance = float(balance['locked'])
+        total_balance = free_balance + locked_balance
+        print("  Free balance = "+str(free_balance))
+        print("  Locked balance = "+str(locked_balance))
+        print("  Total balance = "+str(total_balance))
+        print("  Quantity to sell = "+str(trade_params['QUANTITY'][trade_params['SYMBOL'].index(symbol)]))
 
-        # Cancel open orders for symbol
-        for order in orders:
-            print("\nCancelling existing orders:")
-            print(order['orderId'])
-            result = client.cancel_order(
+        # If total balance of the respective asset is zero, remove the given asset from trade_params lists and overwrite config file
+        if total_balance == 0:
+            print("\nTotal balance for "+trade_params['ASSET'][trade_params['SYMBOL'].index(symbol)]+" is zero, removing from price monitoring...\n")
+            index = trade_params['SYMBOL'].index(symbol)
+            trade_params['ASSET'].pop(index)
+            trade_params['SYMBOL'].pop(index)
+            trade_params['TARGETPRICE'].pop(index)
+            trade_params['QUANTITY'].pop(index)
+            utils.json_save(trade_params, 'configs/trade_config.json')
+        else:
+
+            # Get open orders for symbol
+            orders = client.get_open_orders(symbol=symbol)
+
+            # Cancel open orders for symbol
+            for order in orders:
+                print("\nCancelling existing orders:")
+                print(order['orderId'])
+                result = client.cancel_order(
+                    symbol=symbol,
+                    orderId=order['orderId']
+                )
+
+            # Place market sell order
+            print("\nPlacing market sell order")
+            order = client.order_market_sell(
                 symbol=symbol,
-                orderId=order['orderId']
+                quantity=min(trade_params['QUANTITY'][trade_params['SYMBOL'].index(symbol)], total_balance),
             )
+            print("  Quantity = "+str(trade_params['QUANTITY'][trade_params['SYMBOL'].index(symbol)]))
 
-        # Place market sell order
-        # quantity-t majd át kéne úgy állítani, hogy max(QUANTITY, total_balance). Csak ehhez meg kéne teremteni a kapcsolatot a symbol és az asset között.
-        print("\nPlacing market sell order")
-        order = client.order_market_sell(
-            symbol=symbol,
-            quantity=trade_params['QUANTITY'][trade_params['SYMBOL'].index(symbol)],
-        )
-        print("  Quantity = "+str(trade_params['QUANTITY'][trade_params['SYMBOL'].index(symbol)]))
+            print("\nOrder placed, finishing process for asset(s) above target...")
 
-        print("\nOrder placed, finishing process for asset(s) above target")
+            # Remove the given asset from trade_params lists and overwrite config file
+            index = trade_params['SYMBOL'].index(symbol)
+            trade_params['ASSET'].pop(index)
+            trade_params['SYMBOL'].pop(index)
+            trade_params['TARGETPRICE'].pop(index)
+            trade_params['QUANTITY'].pop(index)
+            utils.json_save(trade_params, 'configs/trade_config.json')
 
-        # Remove the given asset from trade_params lists and overwrite config file
-        index = trade_params['SYMBOL'].index(symbol)
-        trade_params['ASSET'].pop(index)
-        trade_params['SYMBOL'].pop(index)
-        trade_params['TARGETPRICE'].pop(index)
-        trade_params['QUANTITY'].pop(index)
-        utils.json_save(trade_params, 'configs/trade_config.json')
-
-        break
+            break
