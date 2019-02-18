@@ -41,11 +41,6 @@ script_params = utils.json_load('configs/script_config.json')
 # Create client connection to exchange by using API keys
 client = Client(api_key, api_secret)
 
-# Sync system time to exchange server time - needed to bypass exchange API security requirements for synced times
-gt = client.get_server_time()
-tt = time.gmtime(int((gt["serverTime"])/1000))
-win32api.SetSystemTime(tt[0], tt[1], 0, tt[2], tt[3], tt[4], tt[5], 0)
-
 # Initialize price monitoring
 print("\nInitializing price monitoring...")
 
@@ -67,8 +62,21 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
     if script_params['SHUTDOWN'] == 1:
         break
 
+    # Sync system time to exchange server time - needed to bypass exchange API security requirements for synced times
+    try:
+        gt = client.get_server_time()
+    except Exception as ex:
+        print("ERROR with get_server_time: " + ex)
+        continue
+    tt = time.gmtime(int((gt["serverTime"])/1000))
+    win32api.SetSystemTime(tt[0], tt[1], 0, tt[2], tt[3], tt[4], tt[5], 0)
+
     # Get all prices using exchange client
-    prices_client = client.get_all_tickers()
+    try:
+        prices_client = client.get_all_tickers()
+    except Exception as ex:
+        print("ERROR with get_all_tickers: " + ex)
+        continue
 
     # Create a so-called "list comprehension" from the original client all_ticker response
     # The following basically takes all elements of prices_client if the 'symbol' key is included in trade_params
@@ -92,7 +100,11 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
 
         # First query asset balance to check if asset is available
         print("\n"+trade_params['ASSET'][trade_params['SYMBOL'].index(symbol)]+" quantities:")
-        balance = client.get_asset_balance(asset=trade_params['ASSET'][trade_params['SYMBOL'].index(symbol)])
+        try:
+            balance = client.get_asset_balance(asset=trade_params['ASSET'][trade_params['SYMBOL'].index(symbol)])
+        except Exception as ex:
+            print("ERROR with get_asset_balance: " + ex)
+            continue
         free_balance = float(balance['free'])
         locked_balance = float(balance['locked'])
         total_balance = free_balance + locked_balance
@@ -113,33 +125,49 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
         else:
 
             # Get open orders for symbol
-            orders = client.get_open_orders(symbol=symbol)
+            try:
+                orders = client.get_open_orders(symbol=symbol)
+            except Exception as ex:
+                print("ERROR with get_open_orders: " + ex)
+                continue
 
             # Cancel open orders for symbol
-            for order in orders:
-                print("\nCancelling existing orders:")
-                print(order['orderId'])
-                result = client.cancel_order(
-                    symbol=symbol,
-                    orderId=order['orderId']
-                )
+            try:
+                for order in orders:
+                    print("\nCancelling existing orders:")
+                    print(order['orderId'])
+                    result = client.cancel_order(
+                        symbol=symbol,
+                        orderId=order['orderId']
+                    )
+            except Exception as ex:
+                print("ERROR with cancel_order: " + ex)
+                continue
 
             # Place market sell order
             print("\nPlacing market sell order")
-            order = client.order_market_sell(
-                symbol=symbol,
-                quantity=min(trade_params['QUANTITY'][trade_params['SYMBOL'].index(symbol)], total_balance),
-            )
-            print("  Quantity = "+str(trade_params['QUANTITY'][trade_params['SYMBOL'].index(symbol)]))
+            for i in range(1,10):
+                try:
+                    order = client.order_market_sell(
+                        symbol=symbol,
+                        quantity=min(trade_params['QUANTITY'][trade_params['SYMBOL'].index(symbol)], total_balance),
+                    )
+                except Exception as ex:
+                    print("ERROR with order_market_sell")
+                    continue
+                else:
+                    print("  Quantity = "+str(trade_params['QUANTITY'][trade_params['SYMBOL'].index(symbol)]))
 
-            print("\nOrder placed, finishing process for asset(s) above target...")
+                    print("\nOrder placed, finishing process for asset(s) above target...")
 
-            # Remove the given asset from trade_params lists and overwrite config file
-            index = trade_params['SYMBOL'].index(symbol)
-            trade_params['ASSET'].pop(index)
-            trade_params['SYMBOL'].pop(index)
-            trade_params['TARGETPRICE'].pop(index)
-            trade_params['QUANTITY'].pop(index)
-            utils.json_save(trade_params, 'configs/trade_config.json')
+                    # Remove the given asset from trade_params lists and overwrite config file
+                    index = trade_params['SYMBOL'].index(symbol)
+                    trade_params['ASSET'].pop(index)
+                    trade_params['SYMBOL'].pop(index)
+                    trade_params['TARGETPRICE'].pop(index)
+                    trade_params['QUANTITY'].pop(index)
+                    utils.json_save(trade_params, 'configs/trade_config.json')
 
-            break
+                    break
+
+            continue
