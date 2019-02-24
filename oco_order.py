@@ -66,7 +66,7 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
     try:
         gt = client.get_server_time()
     except Exception as ex:
-        print("ERROR with get_server_time: " + ex)
+        print("ERROR with get_server_time: " + str(ex))
         continue
     tt = time.gmtime(int((gt["serverTime"])/1000))
     win32api.SetSystemTime(tt[0], tt[1], 0, tt[2], tt[3], tt[4], tt[5], 0)
@@ -75,7 +75,7 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
     try:
         prices_client = client.get_all_tickers()
     except Exception as ex:
-        print("ERROR with get_all_tickers: " + ex)
+        print("ERROR with get_all_tickers: " + str(ex))
         continue
 
     # Create a so-called "list comprehension" from the original client all_ticker response
@@ -103,7 +103,7 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
         try:
             balance = client.get_asset_balance(asset=trade_params['ASSET'][trade_params['SYMBOL'].index(symbol)])
         except Exception as ex:
-            print("ERROR with get_asset_balance: " + ex)
+            print("ERROR with get_asset_balance: " + str(ex))
             continue
         free_balance = float(balance['free'])
         locked_balance = float(balance['locked'])
@@ -128,7 +128,7 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
             try:
                 orders = client.get_open_orders(symbol=symbol)
             except Exception as ex:
-                print("ERROR with get_open_orders: " + ex)
+                print("ERROR with get_open_orders: " + str(ex))
                 continue
 
             # Cancel open orders for symbol
@@ -141,7 +141,7 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
                         orderId=order['orderId']
                     )
             except Exception as ex:
-                print("ERROR with cancel_order: " + ex)
+                print("ERROR with cancel_order: " + str(ex))
                 continue
 
             # Place market sell order
@@ -153,7 +153,7 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
                         quantity=min(trade_params['QUANTITY'][trade_params['SYMBOL'].index(symbol)], total_balance),
                     )
                 except Exception as ex:
-                    print("ERROR with order_market_sell")
+                    print("ERROR with order_market_sell: " + str(ex))
                     continue
                 else:
                     print("  Quantity = "+str(trade_params['QUANTITY'][trade_params['SYMBOL'].index(symbol)]))
