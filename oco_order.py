@@ -52,7 +52,7 @@ while counter < script_params['COUNTERMAX'] or script_params['COUNTERMAX'] < 0:
 
     counter += 1
 
-    print("\nRunning cycle #"+str(counter)+"...")
+    print("\n" + time.asctime() + " -- Running cycle #" + str(counter) + "...")
 
     # At each cycle we reload the config files to see if user changed anything at runtime
     trade_params = utils.json_load('configs/trade_config.json')
