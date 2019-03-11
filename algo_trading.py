@@ -3,6 +3,8 @@ from api_keys import api_key_1
 import pandas as pd
 import numpy as np
 
+import matplotlib.pyplot as plt
+
 reinv_ratio = 1.0
 
 trading_fee = 0.001
@@ -166,5 +168,12 @@ print("Portfolio value: " + str(signals['portf_value_close'].iloc[counter-1]))
 print("Benchmark value: " + str(signals['bm_value'].iloc[counter-1]))
 
 print(signals.iloc[0:counter].tail())
+
+plt.plot(signals.iloc[0:counter].index, signals.iloc[0:counter].portf_value_close,color='black',label='PortfValue')
+plt.plot(signals.iloc[0:counter].index, signals.iloc[0:counter].bm_value,color='red',label='BenchmValue')
+plt.xlabel('Time')
+plt.ylabel('Dollar')
+plt.legend()
+plt.show()
 
 # signals.to_csv('portfolio.csv')
