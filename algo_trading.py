@@ -3,6 +3,27 @@ from api_keys import api_key_1
 import pandas as pd
 import numpy as np
 
+reinv_ratio = 1.0
+
+trading_fee = 0.001
+
+end = 100
+
+trade_price = 'trade_price'
+trade_qty = 'trade_qty'
+asset_qty_open = 'asset_qty_open'
+asset_qty_close = 'asset_qty_close'
+asset_value_open = 'asset_value_open'
+asset_value_close = 'asset_value_close'
+cash_value_open = 'cash_value_open'
+cash_value_close = 'cash_value_close'
+portf_value_open = 'portf_value_open'
+portf_value_close = 'portf_value_close'
+
+asset_price_open = 'asset_price_open'
+asset_price_close = 'asset_price_close'
+
+
 # Define API key and secret as variables
 api_key = api_key_1['api_key']
 api_secret = api_key_1['api_secret']
@@ -34,6 +55,7 @@ client = Client(api_key, api_secret)
 
 # Load historical data for the purpose of backtesting
 inputs = pd.read_csv('klines.csv', index_col=0)
+inputs['Open time'] = pd.to_datetime(inputs['Open time'], unit='ms')
 inputs.set_index('Open time', inplace=True)
 
 # Define short and long windows for moving average calculation
@@ -71,22 +93,78 @@ signals['bm_qty'] = bm_qty
 signals['bm_value'] = signals['bm_qty'].multiply(signals['asset_price_open'])
 
 # Preload columns necessary for portfolio value calculation
-signals['order_qty'] = 0
-signals['asset_qty_open'] = 0
-signals['asset_qty_close'] = 0
-signals['asset_value_open'] = 0
-signals['asset_value_close'] = 0
-signals['cash_value_open'] = initial_capital
-signals['cash_value_close'] = initial_capital
-signals['portf_value_open'] = initial_capital
-signals['portf_value_close'] = initial_capital
+signals['trade_price'] = signals['asset_price_open']
+signals['trade_qty'] = 0.0
+signals['asset_qty_open'] = 0.0
+signals['asset_qty_close'] = 0.0
+signals['asset_value_open'] = 0.0
+signals['asset_value_close'] = 0.0
+signals['cash_value_open'] = 0.0
+signals['cash_value_close'] = 0.0
+signals['portf_value_open'] = 0.0
+signals['portf_value_close'] = 0.0
+
+signals['cash_value_open'][0] = initial_capital
+signals['cash_value_close'][0] = initial_capital
+signals['portf_value_open'][0] = initial_capital
+signals['portf_value_close'][0] = initial_capital
 
 # NEXT STEP: iterate over specific parts of the DataFrame to carry out specific calculations
 # (e.g.: open values are equal to the close values of the previous period)
+open_list = [asset_qty_open, asset_value_open, cash_value_open, portf_value_open]
+close_list = [asset_qty_close, asset_value_close, cash_value_close, portf_value_close]
 
-print("Portfolio value: " + str(signals['portf_value_close'].iloc[-1]))
-print("Benchmark value: " + str(signals['bm_value'].iloc[-1]))
 
-print(signals.head())
+counter = 0
+for period in signals.index:
+
+    if period != signals.index[0]:
+        counter += 1
+        #signals.loc[[period], open_list] = signals.shift(1).loc[[period], close_list]
+        signals.loc[[period], asset_qty_open] = signals.shift(1).loc[[period], asset_qty_close]
+        signals.loc[[period], asset_value_open] = signals.shift(1).loc[[period], asset_value_close]
+        signals.loc[[period], cash_value_open] = signals.shift(1).loc[[period], cash_value_close]
+        signals.loc[[period], portf_value_open] = signals.shift(1).loc[[period], portf_value_close]
+
+        cash_open = signals.loc[[period], cash_value_open][0]
+        asset_pr_open = signals.loc[[period], asset_price_open][0]
+        asset_pr_close = signals.loc[[period], asset_price_close][0]
+        asset_quantity_open = signals.loc[[period], asset_qty_open][0]
+
+        trigger = signals.loc[[period], 'trigger'][0]
+        trade_pr = asset_pr_open
+
+        if np.isnan(trigger):
+            trade_quantity = 0.0
+        elif trigger == 1.0:
+            trade_quantity = reinv_ratio * cash_open / trade_pr * (1.0 - trading_fee)
+        elif trigger == -1.0:
+            trade_quantity = asset_quantity_open * trigger
+        else:
+            trade_quantity = 0.0
+
+        asset_quantity_close = asset_quantity_open + trade_quantity
+
+        asset_close = asset_quantity_close * asset_pr_close
+
+        cash_close = cash_open - (trade_quantity * trade_pr / (1.0 - trading_fee))
+
+        portf_close = asset_close + cash_close
+
+        signals.loc[[period], trade_qty] = trade_quantity
+        signals.loc[[period], asset_qty_close] = asset_quantity_close
+        signals.loc[[period], asset_value_close] = asset_close
+        signals.loc[[period], cash_value_close] = cash_close
+        signals.loc[[period], portf_value_close] = portf_close
+
+        print("did " + str(counter))
+        if counter == end:
+            break
+
+
+print("Portfolio value: " + str(signals['portf_value_close'].iloc[counter-1]))
+print("Benchmark value: " + str(signals['bm_value'].iloc[counter-1]))
+
+print(signals.iloc[0:counter].tail())
 
 # signals.to_csv('portfolio.csv')
