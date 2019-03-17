@@ -6,9 +6,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-reinv_ratio = 1.0
+reinv_ratio = 0.98
 trading_fee = 0.001
-end = 100
+end = 500
 
 # Define short and long windows for moving average calculation
 window_short = 13
@@ -93,7 +93,8 @@ bm_qty = initial_capital / initial_price
 
 # Add benchmark quantity and value to portfolio
 signals['bm_qty'] = bm_qty
-signals['bm_value'] = signals['bm_qty'].multiply(signals[ASSET_PRICE_OPEN])
+signals['bm_value_open'] = signals['bm_qty'].multiply(signals[ASSET_PRICE_OPEN])
+signals['bm_value_close'] = signals['bm_qty'].multiply(signals[ASSET_PRICE_CLOSE])
 
 # Preload columns necessary for portfolio value calculation
 signals[TRADE_PRICE] = signals[ASSET_PRICE_OPEN]
@@ -125,9 +126,7 @@ for period in signals.index[1:]:
 
     # value read (and assigning to variables) from sub-DataFrame
     # by converting the numpy array from .values[0] into a list
-    asset_qty_close, asset_value_close, cash_value_close, portf_value_close = list(signals.shift(1).loc[[period], close_list].values[0])
-
-    asset_qty_open, asset_value_open, cash_value_open, portf_value_open = asset_qty_close, asset_value_close, cash_value_close, portf_value_close
+    asset_qty_open, asset_value_open, cash_value_open, portf_value_open = list(signals.shift(1).loc[[period], close_list].values[0])
 
     asset_price_open, asset_price_close, trigger = \
         list(signals.loc[[period], [ASSET_PRICE_OPEN, ASSET_PRICE_CLOSE, 'trigger']].values[0])
@@ -137,7 +136,7 @@ for period in signals.index[1:]:
     if np.isnan(trigger):
         trade_qty = 0.0
     elif trigger == 1.0:
-        trade_qty = reinv_ratio * cash_value_open / trade_price * (1.0 - trading_fee)
+        trade_qty = reinv_ratio * cash_value_open / asset_price_open * (1.0 - trading_fee)
     elif trigger == -1.0:
         trade_qty = asset_qty_open * trigger
     else:
@@ -156,19 +155,18 @@ for period in signals.index[1:]:
         np.array([asset_qty_close, asset_value_close, cash_value_close, portf_value_close, trade_qty])
 
     if counter % 100 == 0:
-        print("did " + str(counter))
-
+        print("Processed " + str(counter) + " rows")
 
 print("Portfolio value: " + str(signals['portf_value_close'].iloc[counter-1]))
-print("Benchmark value: " + str(signals['bm_value'].iloc[counter-1]))
+print("Benchmark value: " + str(signals['bm_value_close'].iloc[counter-1]))
 
-print(signals.tail())
+print(signals.describe())
 
 plt.plot(signals.index, signals.portf_value_close,color='black',label='PortfValue')
-plt.plot(signals.index, signals.bm_value,color='red',label='BenchmValue')
+plt.plot(signals.index, signals.bm_value_close,color='red',label='BenchmValue')
 plt.xlabel('Time')
 plt.ylabel('Dollar')
 plt.legend()
 plt.show()
 
-# signals.to_csv('portfolio.csv')
+# signals.to_csv('signals.csv')
