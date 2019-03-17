@@ -151,8 +151,9 @@ for period in signals.index[1:]:
     portf_value_close = asset_value_close + cash_value_close
 
     # value assignment into DataFrame (.loc is a sub dataframe) via np.array (from a list)
-    signals.loc[[period], close_list + [TRADE_QTY]] = \
-        np.array([asset_qty_close, asset_value_close, cash_value_close, portf_value_close, trade_qty])
+    signals.loc[[period], open_list + close_list + [TRADE_QTY]] = \
+        np.array([asset_qty_open, asset_value_open, cash_value_open, portf_value_open,
+                  asset_qty_close, asset_value_close, cash_value_close, portf_value_close, trade_qty])
 
     if counter % 100 == 0:
         print("Processed " + str(counter) + " rows")
