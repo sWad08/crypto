@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 reinv_ratio = 0.98
 trading_fee = 0.001
-end = 500
+end = 15000
 
 # Define short and long windows for moving average calculation
 window_short = 13
@@ -136,7 +136,7 @@ for period in signals.index[1:]:
     if np.isnan(trigger):
         trade_qty = 0.0
     elif trigger == 1.0:
-        trade_qty = reinv_ratio * cash_value_open / asset_price_open * (1.0 - trading_fee)
+        trade_qty = reinv_ratio * cash_value_open / (asset_price_open * (1.0 + trading_fee))
     elif trigger == -1.0:
         trade_qty = asset_qty_open * trigger
     else:
@@ -146,7 +146,7 @@ for period in signals.index[1:]:
 
     asset_value_close = asset_qty_close * asset_price_close
 
-    cash_value_close = cash_value_open - (trade_qty * trade_price / (1.0 - trading_fee))
+    cash_value_close = cash_value_open - (trade_qty * trade_price * (1.0 + trading_fee))
 
     portf_value_close = asset_value_close + cash_value_close
 
@@ -157,6 +157,8 @@ for period in signals.index[1:]:
 
     if counter % 100 == 0:
         print("Processed " + str(counter) + " rows")
+
+# signals.to_csv('signals.csv')
 
 print("Portfolio value: " + str(signals['portf_value_close'].iloc[counter-1]))
 print("Benchmark value: " + str(signals['bm_value_close'].iloc[counter-1]))
@@ -170,4 +172,4 @@ plt.ylabel('Dollar')
 plt.legend()
 plt.show()
 
-# signals.to_csv('signals.csv')
+
