@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 
 reinv_ratio = 0.98
-trading_fee = 0.001
+trade_fee_rate = 0.00075
 end = 15000
 
 # Define short and long windows for moving average calculation
@@ -18,8 +18,12 @@ window_long = 44
 initial_capital = float(3000.0)
 
 TRIGGER = 'trigger'
+REINV_VALUE = 'reinv_value'
 TRADE_PRICE = 'trade_price'
 TRADE_QTY = 'trade_qty'
+TRADE_VALUE_NET = 'trade_value_net'
+TRADE_FEE = 'trade_fee'
+TRADE_VALUE_GROSS = 'trade_value_gross'
 ASSET_QTY_OPEN = 'asset_qty_open'
 ASSET_QTY_CLOSE = 'asset_qty_close'
 ASSET_VALUE_OPEN = 'asset_value_open'
@@ -91,14 +95,18 @@ signals[TRIGGER] = signals['signal'].diff().shift(1)
 initial_price = signals[ASSET_PRICE_OPEN].iloc[0]
 bm_qty = initial_capital / initial_price
 
-# Add benchmark quantity and value to portfolio
+# Add benchmark quantity and value to signals
 signals['bm_qty'] = bm_qty
 signals['bm_value_open'] = signals['bm_qty'].multiply(signals[ASSET_PRICE_OPEN])
 signals['bm_value_close'] = signals['bm_qty'].multiply(signals[ASSET_PRICE_CLOSE])
 
 # Preload columns necessary for portfolio value calculation
 signals[TRADE_PRICE] = signals[ASSET_PRICE_OPEN]
+signals[REINV_VALUE] = 0.0
 signals[TRADE_QTY] = 0.0
+signals[TRADE_VALUE_NET] = 0.0
+signals[TRADE_FEE] = 0.0
+signals[TRADE_VALUE_GROSS] = 0.0
 signals[ASSET_QTY_OPEN] = 0.0
 signals[ASSET_QTY_CLOSE] = 0.0
 signals[ASSET_VALUE_OPEN] = 0.0
@@ -124,7 +132,7 @@ for period in signals.index[1:]:
 
     counter += 1
 
-    # value read (and assigning to variables) from sub-DataFrame
+    # Read values from sub-DataFrame (and assign them to variables)
     # by converting the numpy array from .values[0] into a list
     asset_qty_open, asset_value_open, cash_value_open, portf_value_open = list(signals.shift(1).loc[[period], close_list].values[0])
 
@@ -136,24 +144,26 @@ for period in signals.index[1:]:
     if np.isnan(trigger):
         trade_qty = 0.0
     elif trigger == 1.0:
-        trade_qty = reinv_ratio * cash_value_open / (asset_price_open * (1.0 + trading_fee))
+        reinv_value = reinv_ratio * cash_value_open
+        trade_qty = reinv_value / trade_price
     elif trigger == -1.0:
         trade_qty = asset_qty_open * trigger
     else:
         trade_qty = 0.0
 
+    trade_value_net = trade_price * trade_qty
+    trade_fee = trade_fee_rate * trade_value_net
+    trade_value_gross = trade_value_net + trade_fee
     asset_qty_close = asset_qty_open + trade_qty
-
     asset_value_close = asset_qty_close * asset_price_close
-
-    cash_value_close = cash_value_open - (trade_qty * trade_price * (1.0 + trading_fee))
-
+    cash_value_close = cash_value_open - trade_value_gross
     portf_value_close = asset_value_close + cash_value_close
 
-    # value assignment into DataFrame (.loc is a sub dataframe) via np.array (from a list)
-    signals.loc[[period], open_list + close_list + [TRADE_QTY]] = \
+    # Assign values into DataFrame (.loc is a sub dataframe) via np.array (from a list)
+    signals.loc[[period], open_list + close_list + [TRADE_QTY] + [TRADE_VALUE_NET] + [TRADE_FEE] + [TRADE_VALUE_GROSS]] = \
         np.array([asset_qty_open, asset_value_open, cash_value_open, portf_value_open,
-                  asset_qty_close, asset_value_close, cash_value_close, portf_value_close, trade_qty])
+                  asset_qty_close, asset_value_close, cash_value_close, portf_value_close,
+                  trade_qty, trade_value_net, trade_fee, trade_value_gross])
 
     if counter % 100 == 0:
         print("Processed " + str(counter) + " rows")
