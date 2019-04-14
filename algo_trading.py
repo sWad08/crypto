@@ -44,7 +44,7 @@ api_secret = api_key_1['api_secret']
 client = Client(api_key, api_secret)
 
 # # Get historical data from exchange
-# klines = client.get_historical_klines("BTCUSDT", Client.KLINE_INTERVAL_1HOUR, "1 Oct, 2017", "31 Dec, 2018")
+# klines = client.get_historical_klines("BTCUSDT", Client.KLINE_INTERVAL_1HOUR, "17 Aug, 2017", "13 Apr, 2019")
 # columns = [
 #     "Open time",
 #     "Open",
