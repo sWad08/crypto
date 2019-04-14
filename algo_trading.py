@@ -140,11 +140,11 @@ for period in signals.index[1:]:
         list(signals.loc[[period], [ASSET_PRICE_OPEN, ASSET_PRICE_CLOSE, 'trigger']].values[0])
 
     trade_price = asset_price_open
+    reinv_value = reinv_ratio * cash_value_open
 
     if np.isnan(trigger):
         trade_qty = 0.0
     elif trigger == 1.0:
-        reinv_value = reinv_ratio * cash_value_open
         trade_qty = reinv_value / trade_price
     elif trigger == -1.0:
         trade_qty = asset_qty_open * trigger
@@ -159,11 +159,11 @@ for period in signals.index[1:]:
     cash_value_close = cash_value_open - trade_value_gross
     portf_value_close = asset_value_close + cash_value_close
 
-    # Assign values into DataFrame (.loc is a sub dataframe) via np.array (from a list)
-    signals.loc[[period], open_list + close_list + [TRADE_QTY] + [TRADE_VALUE_NET] + [TRADE_FEE] + [TRADE_VALUE_GROSS]] = \
+    # Assign values into DataFrame (.loc is a sub DataFrame) via np.array (from a list)
+    signals.loc[[period], open_list + close_list + [REINV_VALUE] + [TRADE_QTY] + [TRADE_VALUE_NET] + [TRADE_FEE] + [TRADE_VALUE_GROSS]] = \
         np.array([asset_qty_open, asset_value_open, cash_value_open, portf_value_open,
                   asset_qty_close, asset_value_close, cash_value_close, portf_value_close,
-                  trade_qty, trade_value_net, trade_fee, trade_value_gross])
+                  reinv_value, trade_qty, trade_value_net, trade_fee, trade_value_gross])
 
     if counter % 100 == 0:
         print("Processed " + str(counter) + " rows")
@@ -175,11 +175,9 @@ print("Benchmark value: " + str(signals['bm_value_close'].iloc[counter-1]))
 
 print(signals.describe())
 
-plt.plot(signals.index, signals.portf_value_close,color='black',label='PortfValue')
-plt.plot(signals.index, signals.bm_value_close,color='red',label='BenchmValue')
+plt.plot(signals.index, signals.portf_value_close, color='blue', label='Portfolio value')
+plt.plot(signals.index, signals.bm_value_close, color='black', label='Benchmark value')
 plt.xlabel('Time')
-plt.ylabel('Dollar')
+plt.ylabel('USD')
 plt.legend()
 plt.show()
-
-
