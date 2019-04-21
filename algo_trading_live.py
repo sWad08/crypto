@@ -51,7 +51,6 @@ while counter < countermax:
     signals = pd.DataFrame(klines, columns=columns)
     signals['open_time'] = pd.to_datetime(signals['open_time'], unit='ms')
     signals.set_index('open_time', inplace=True)
-    print(signals.tail())
 
     # Calculate moving averages based on windows defined earlier
     signals['ma_short'] = signals['asset_price_close'].rolling(window=window_short, min_periods=window_short, center=False).mean()
@@ -72,10 +71,35 @@ while counter < countermax:
 
     # Decide if an order has to be placed
     if signal == 1 and position == 0:
+
         print("BUY!")
+
+        # Query USDT balance
+        balance_usdt = client.get_asset_balance(asset='USDT')
+        free_balance_usdt = float(balance_usdt['free'])
+        print("USDT balance: " + str(free_balance_usdt))
+
+        # Calculate trade quantity based on reinvestment ratio
+        trade_qty = free_balance_usdt * reinv_ratio
+        print("Trade quantity: " + str(trade_qty))
+
+        # Update position as long
+        position = 1
+
     elif signal == -1 and position == 1:
+
         print("SELL!")
+
+        # Query BTC balance
+        balance_btc = client.get_asset_balance(asset='BTC')
+        free_balance_btc = float(balance_btc['free'])
+        print("BTC balance: " + str(free_balance_btc))
+
+        # Update position as neutral
+        position = 0
+
     else:
+
         print("Nothing to see here!")
 
-# signals.to_csv('signals_live.csv')
+signals.to_csv('signals_live.csv')
