@@ -4,7 +4,8 @@ import pandas as pd
 import numpy as np
 
 import matplotlib.pyplot as plt
-
+from pandas.plotting import register_matplotlib_converters
+register_matplotlib_converters()
 
 reinv_ratio = 0.98
 trade_fee_rate = 0.00075
