@@ -15,6 +15,10 @@ end = 15000
 window_short = 13
 window_long = 44
 
+# Define start date for backtesting
+start_date = pd.Timestamp('2019-01-01')
+
+
 # Set initial capital for backtesting
 initial_capital = float(3000.0)
 
@@ -45,7 +49,7 @@ api_secret = api_key_1['api_secret']
 client = Client(api_key, api_secret)
 
 # # Get historical data from exchange
-# klines = client.get_historical_klines("BTCUSDT", Client.KLINE_INTERVAL_1HOUR, "17 Aug, 2017", "13 Apr, 2019")
+# klines = client.get_historical_klines("BTCUSDT", Client.KLINE_INTERVAL_1HOUR, "1 Dec, 2018", "1 Jul, 2019")
 # columns = [
 #     "Open time",
 #     "Open",
@@ -68,6 +72,7 @@ client = Client(api_key, api_secret)
 
 # Load historical data for the purpose of backtesting
 inputs = pd.read_csv('klines.csv', index_col=0)
+
 inputs['Open time'] = pd.to_datetime(inputs['Open time'], unit='ms')
 inputs.set_index('Open time', inplace=True)
 
@@ -93,8 +98,11 @@ signals[TRIGGER] = 0.0  # Preload with zeroes
 signals[TRIGGER] = signals['signal'].diff().shift(1)
 
 # Calculate asset quantity for benchmark: buying and holding as many units of asset as the initial capital enables
-initial_price = signals[ASSET_PRICE_OPEN].iloc[0]
+initial_price = signals[ASSET_PRICE_OPEN].at[start_date]
 bm_qty = initial_capital / initial_price
+
+# Remove rows before start date
+signals = signals[start_date:]
 
 # Add benchmark quantity and value to signals
 signals['bm_qty'] = bm_qty
@@ -169,7 +177,7 @@ for period in signals.index[1:]:
     if counter % 100 == 0:
         print("Processed " + str(counter) + " rows")
 
-# signals.to_csv('signals.csv')
+signals.to_csv('signals.csv')
 
 print("Portfolio value: " + str(signals['portf_value_close'].iloc[counter-1]))
 print("Benchmark value: " + str(signals['bm_value_close'].iloc[counter-1]))
