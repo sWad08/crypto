@@ -26,9 +26,9 @@ for short in window_list:
             window_short.append(short)
             window_long.append(long)
 
-print(window_short)
-print(window_long)
-print()
+#print(window_short)
+#print(window_long)
+#print()
 
 # Define short and long windows for moving average calculation
 #window_short = [10]
@@ -106,6 +106,7 @@ signals = pd.DataFrame(index=inputs.index)
 signals[ASSET_PRICE_OPEN] = inputs['Open']
 signals[ASSET_PRICE_CLOSE] = inputs['Close']
 
+
 for i in range(len(window_short)):
 
     # Calculate moving averages based on windows defined earlier
@@ -125,8 +126,13 @@ signals['bm_qty'] = bm_qty
 signals['bm_value_open'] = signals['bm_qty'].multiply(signals[ASSET_PRICE_OPEN])
 signals['bm_value_close'] = signals['bm_qty'].multiply(signals[ASSET_PRICE_CLOSE])
 
+# initiating final combined dataframe
 signals_list = list()
 multiindex_df = pd.DataFrame()
+
+# setup some constant names in list for later optimized access
+open_list = [ASSET_QTY_OPEN, ASSET_VALUE_OPEN, CASH_VALUE_OPEN, PORTF_VALUE_OPEN]
+close_list = [ASSET_QTY_CLOSE, ASSET_VALUE_CLOSE, CASH_VALUE_CLOSE, PORTF_VALUE_CLOSE]
 
 for i in range(len(window_short)):
     signal_df = pd.DataFrame()
@@ -157,68 +163,61 @@ for i in range(len(window_short)):
     signal_df[PORTF_VALUE_OPEN][0] = initial_capital
     signal_df[PORTF_VALUE_CLOSE][0] = initial_capital
 
+    # NEXT STEP: iterate over specific parts of the DataFrame to carry out specific calculations
+    # (e.g.: open values are equal to the close values of the previous period)
+
+    trigger_dates = signal_df[signal_df[TRIGGER] != 0.0].index
+    counter = 0
+    prev_trigger_date = signal_df.index[0]
+
+    signal_print_name = "signal_" + str(i) + " - MA(" + str(window_short[i]) + "," + str(window_long[i]) + ")"
+    print("Processing " + signal_print_name + " : Total of " + str(len(trigger_dates)) + " trigger dates...")
+    for period in trigger_dates:
+
+        counter += 1
+
+        # Read values from sub-DataFrame (and assign them to variables)
+        # by converting the numpy array from .values[0] into a list
+        asset_qty_open, asset_value_open, cash_value_open, portf_value_open = list(
+            signal_df.loc[prev_trigger_date, close_list].values)
+
+        asset_price_open, asset_price_close, trigger = \
+            list(signal_df.loc[period, [ASSET_PRICE_OPEN, ASSET_PRICE_CLOSE, 'trigger']].values)
+
+        trade_price = asset_price_open
+        reinv_value = reinv_ratio * cash_value_open
+
+        if np.isnan(trigger):
+            trade_qty = 0.0
+        elif trigger == 1.0:
+            trade_qty = reinv_value / trade_price
+        elif trigger == -1.0:
+            trade_qty = asset_qty_open * trigger
+        else:
+            trade_qty = 0.0
+
+        trade_value_net = trade_price * trade_qty
+        trade_fee = trade_fee_rate * trade_value_net
+        trade_value_gross = trade_value_net + trade_fee
+        asset_qty_close = asset_qty_open + trade_qty
+        asset_value_close = asset_qty_close * asset_price_close
+        cash_value_close = cash_value_open - trade_value_gross
+        portf_value_close = asset_value_close + cash_value_close
+
+        # Assign values into DataFrame (.loc is a sub DataFrame) via np.array (from a list)
+        signal_df.loc[
+            period, open_list + close_list + [REINV_VALUE] + [TRADE_QTY] + [TRADE_VALUE_NET] + [
+                TRADE_FEE] + [TRADE_VALUE_GROSS]] = \
+            np.array([asset_qty_open, asset_value_open, cash_value_open, portf_value_open,
+                      asset_qty_close, asset_value_close, cash_value_close, portf_value_close,
+                      reinv_value, trade_qty, trade_value_net, trade_fee, trade_value_gross])
+        prev_trigger_date = period
+
+
     signals_list.append(signal_df)
 
 signals_names = tuple(['signals_' + str(x) for x in range(len(signals_list))])
 multiindex_df = pd.concat(signals_list, keys=signals_names)
-
-# NEXT STEP: iterate over specific parts of the DataFrame to carry out specific calculations
-# (e.g.: open values are equal to the close values of the previous period)
-open_list = [ASSET_QTY_OPEN, ASSET_VALUE_OPEN, CASH_VALUE_OPEN, PORTF_VALUE_OPEN]
-close_list = [ASSET_QTY_CLOSE, ASSET_VALUE_CLOSE, CASH_VALUE_CLOSE, PORTF_VALUE_CLOSE]
-
-# lets calculate the combined trigger dates list (any date when any of the signals trigger)
-signals['trigger_SUM'] = 0.0
-for i in range(len(window_short)):
-    signals['trigger_SUM'] = signals['trigger_SUM']+ signals['trigger_' + str(i)].abs()
-trigger_dates = signals[signals['trigger_SUM'] != 0.0].index
-print("Processing total of " + str(len(trigger_dates)) + " number of trigger dates")
-
-counter = 0
-prev_trigger_date = signals.index[0]
-for period in trigger_dates:
-
-    counter += 1
-
-    # Read values from sub-DataFrame (and assign them to variables)
-    # by converting the numpy array from .values[0] into a list
-    signal_prev_period_pairs = [tuple([x, prev_trigger_date]) for x in signals_names]
-    signal_period_pairs = [tuple([x,period]) for x in signals_names]
-    asset_qty_open, asset_value_open,cash_value_open, portf_value_open = list(multiindex_df.loc[signal_prev_period_pairs,close_list].values.T)
-
-    asset_price_open, asset_price_close, trigger = \
-        list(multiindex_df.loc[signal_period_pairs, [ASSET_PRICE_OPEN, ASSET_PRICE_CLOSE, 'trigger']].values.T)
-
-    trade_price = asset_price_open
-    reinv_value = reinv_ratio * cash_value_open
-
-    trade_qty = np.ndarray(len(trigger))
-    for i in range(len(trigger)):
-        if np.isnan(trigger[i]):
-            trade_qty[i] = 0.0
-        elif trigger[i] == 1.0:
-            trade_qty[i] = reinv_value[i] / trade_price[i]
-        elif trigger[i] == -1.0:
-            trade_qty[i] = asset_qty_open[i] * trigger[i]
-        else:
-            trade_qty[i] = 0.0
-
-    trade_value_net = trade_price * trade_qty
-    trade_fee = trade_fee_rate * trade_value_net
-    trade_value_gross = trade_value_net + trade_fee
-    asset_qty_close = asset_qty_open + trade_qty
-    asset_value_close = asset_qty_close * asset_price_close
-    cash_value_close = cash_value_open - trade_value_gross
-    portf_value_close = asset_value_close + cash_value_close
-
-    # Assign values into DataFrame (.loc is a sub DataFrame) via np.array (from a list)
-    multiindex_df.loc[signal_period_pairs, open_list + close_list + [REINV_VALUE] + [TRADE_QTY] + [TRADE_VALUE_NET] + [TRADE_FEE] + [TRADE_VALUE_GROSS]] = \
-        np.array([asset_qty_open, asset_value_open, cash_value_open, portf_value_open,
-                  asset_qty_close, asset_value_close, cash_value_close, portf_value_close,
-                  reinv_value, trade_qty, trade_value_net, trade_fee, trade_value_gross]).T
-    prev_trigger_date = period
-    if counter % 100 == 0:
-        print("Processed " + str(counter) + " trigger dates")
 
 
 # finally fill in the missing gaps
@@ -231,12 +230,12 @@ try:
 except:
     print("Can't use signals.csv file for saving...")
 
+last_period = signals.index[-1]
+signal_period_pairs = [tuple([x,last_period]) for x in signals_names]
 portf_value_close = multiindex_df.loc[signal_period_pairs,PORTF_VALUE_CLOSE].values.T
 top_3_idx = np.argsort(portf_value_close)[-3:]
 
-last_period = signals.index[-1]
 print("\nBenchmark value: " + str(signals['bm_value_close'].loc[last_period]))
-# print("Portfolio value: " + str(signals['portf_value_close'].iloc[counter-1]))
 
 colors = ['r', 'g', 'b']
 

@@ -10,7 +10,7 @@ def moving_avg_signal(df,window_short,window_long,col_name_override=None):
 
         # Create signals: 1 if bullish, 0 if bearish
         df['signal'] = 0.0  # Preload with zeroes
-        df['signal'][window_short:] = np.where(df['ma_short'][window_short:] > df['ma_long'][window_short:], 1.0, 0.0)  # Only for the period greater than the short MA -- IS THAT CORRECT? SHOULDN'T IT BE THE LONG MA?
+        df['signal'].iloc[window_short:] = np.where(df['ma_short'][window_short:] > df['ma_long'][window_short:], 1.0, 0.0)  # Only for the period greater than the short MA -- IS THAT CORRECT? SHOULDN'T IT BE THE LONG MA?
 
         col_name = 'TRIGGER_' + str(window_short) + '_' + str(window_long) if col_name_override is None else col_name_override
 
