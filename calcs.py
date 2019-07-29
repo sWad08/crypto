@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
 
-def moving_avg_signal(df,window_short,window_long,col_name_override=None):
+def moving_avg_signal(df,window_short,window_long,col_name_override=None,save_in_df=True):
+
+    return_df = None
 
     if 'asset_price_close' in df.columns:
         # Calculate moving averages based on windows defined earlier
@@ -14,7 +16,11 @@ def moving_avg_signal(df,window_short,window_long,col_name_override=None):
 
         col_name = 'TRIGGER_' + str(window_short) + '_' + str(window_long) if col_name_override is None else col_name_override
 
-        # Generate triggers if the signal changed in the previous period: go long if 1, go short if -1
-        df[col_name] = 0.0  # Preload with zeroes
-        df[col_name] = df['signal'].diff().shift(1)
+        if save_in_df:
+            # Generate triggers if the signal changed in the previous period: go long if 1, go short if -1
+            df[col_name] = 0.0  # Preload with zeroes
+            df[col_name] = df['signal'].diff().shift(1)
+        else:
+            return_df = df['signal'].diff().shift(1).copy(deep=True)
 
+        return return_df

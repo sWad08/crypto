@@ -10,37 +10,7 @@ import matplotlib.pyplot as plt
 from pandas.plotting import register_matplotlib_converters
 register_matplotlib_converters()
 
-reinv_ratio = 0.98
-trade_fee_rate = 0.00075
-end_date = None #pd.Timestamp('2019-02-01') #15000
-end = -1
-
-window_list = [1,2,5,8,13,21,34,55]
-
-window_short = []
-window_long = []
-
-for short in window_list:
-    for long in window_list:
-        if short < long:
-            window_short.append(short)
-            window_long.append(long)
-
-#print(window_short)
-#print(window_long)
-#print()
-
-# Define short and long windows for moving average calculation
-#window_short = [10]
-#window_long = [20]
-
-# Define start date for backtesting
-start_date = pd.Timestamp('2017-09-01') #pd.Timestamp('2017-09-01')
-
-# Set initial capital for backtesting
-initial_capital = float(3000.0)
-initial_asset_qty = 0.0
-
+# Define label name constants
 TRIGGER = 'trigger'
 REINV_VALUE = 'reinv_value'
 TRADE_PRICE = 'trade_price'
@@ -58,6 +28,35 @@ PORTF_VALUE_OPEN = 'portf_value_open'
 PORTF_VALUE_CLOSE = 'portf_value_close'
 ASSET_PRICE_OPEN = 'asset_price_open'
 ASSET_PRICE_CLOSE = 'asset_price_close'
+
+# Set initial capital for backtesting
+initial_capital = float(3000.0)
+initial_asset_qty = 0.0
+reinv_ratio = 0.98
+trade_fee_rate = 0.00075
+
+# Define start date for backtesting
+start_date = pd.Timestamp('2017-10-01') #pd.Timestamp('2017-09-01')
+# Define end date for backtesting
+end_date = pd.Timestamp('2019-06-30') #15000 None
+end = None #-1
+
+# define list of windows we would want to create a combination from
+window_list = [1,2,5,8,13,21,34,55]#list(range(1, 55)) #[1,2,5,8,13,21,34,55]#
+
+window_short = []
+window_long = []
+
+for short in window_list:
+    for long in window_list:
+        if short < long:
+            window_short.append(short)
+            window_long.append(long)
+
+
+# Define short and long windows for moving average calculation (to override previous combinations if needed)
+#window_short = [10]
+#window_long = [20]
 
 # Define API key and secret as variables
 api_key = api_key_1['api_key']
@@ -106,11 +105,13 @@ signals = pd.DataFrame(index=inputs.index)
 signals[ASSET_PRICE_OPEN] = inputs['Open']
 signals[ASSET_PRICE_CLOSE] = inputs['Close']
 
-
+print("Working on " + str(len(window_short)) + " triggers...")
+trigger_list = []
 for i in range(len(window_short)):
 
-    # Calculate moving averages based on windows defined earlier
-    moving_avg_signal(signals,window_short[i],window_long[i],col_name_override=TRIGGER + '_' + str(i))
+    # Calculate moving averages based on windows defined earlier and adding it into a list of triggers (no need to store
+    # in the dataframe itself)
+    trigger_list.append(moving_avg_signal(signals,window_short[i],window_long[i],save_in_df=False))
 
 # Calculate asset quantity for benchmark: buying and holding as many units of asset as the initial capital enables
 initial_price = signals[ASSET_PRICE_OPEN].at[start_date]
@@ -126,20 +127,21 @@ signals['bm_qty'] = bm_qty
 signals['bm_value_open'] = signals['bm_qty'].multiply(signals[ASSET_PRICE_OPEN])
 signals['bm_value_close'] = signals['bm_qty'].multiply(signals[ASSET_PRICE_CLOSE])
 
-# initiating final combined dataframe
-signals_list = list()
-multiindex_df = pd.DataFrame()
-
 # setup some constant names in list for later optimized access
 open_list = [ASSET_QTY_OPEN, ASSET_VALUE_OPEN, CASH_VALUE_OPEN, PORTF_VALUE_OPEN]
 close_list = [ASSET_QTY_CLOSE, ASSET_VALUE_CLOSE, CASH_VALUE_CLOSE, PORTF_VALUE_CLOSE]
+
+# initiating final combined dataframe
+signals_list = list()
+multiindex_df = pd.DataFrame()
+last_portf_value = []
 
 for i in range(len(window_short)):
     signal_df = pd.DataFrame()
     signal_df['bm_value_close'] = signals['bm_value_close']
     signal_df[ASSET_PRICE_OPEN] = signals[ASSET_PRICE_OPEN]
     signal_df[ASSET_PRICE_CLOSE] = signals[ASSET_PRICE_CLOSE]
-    signal_df[TRIGGER] = signals[TRIGGER + '_' + str(i)]
+    signal_df[TRIGGER] = trigger_list[i]
     # Preload columns necessary for portfolio value calculation
     signal_df[TRADE_PRICE] = signal_df[ASSET_PRICE_OPEN]
     signal_df[REINV_VALUE] = np.nan
@@ -222,29 +224,32 @@ for i in range(len(window_short)):
                                  ])
 
     # writing back data into full dataframe
-    #triggered_df[field_list] = data
     signal_df.loc[signal_df[TRIGGER] != 0.0,field_list] = data
-
     signals_list.append(signal_df)
+    last_portf_value.append(portf_value_close)
 
+print("Done...combining dataframes...")
 signals_names = tuple(['signals_' + str(x) for x in range(len(signals_list))])
 multiindex_df = pd.concat(signals_list, keys=signals_names)
 
-
+print("Done...filling regular dates...")
 # finally fill in the missing gaps
 multiindex_df[ASSET_QTY_CLOSE].fillna(method='ffill',inplace=True)
 multiindex_df[CASH_VALUE_CLOSE].fillna(method='ffill',inplace=True)
 multiindex_df[ASSET_VALUE_CLOSE] = multiindex_df[ASSET_QTY_CLOSE] * multiindex_df[ASSET_PRICE_CLOSE]
 multiindex_df[PORTF_VALUE_CLOSE] = multiindex_df[ASSET_VALUE_CLOSE] + multiindex_df[CASH_VALUE_CLOSE]
+
+print("Done...saving into csv...")
 try:
     multiindex_df.to_csv('signals.csv')
 except:
     print("Can't use signals.csv file for saving...")
 
+print("Done all")
 last_period = signals.index[-1]
-signal_period_pairs = [tuple([x,last_period]) for x in signals_names]
-portf_value_close = multiindex_df.loc[signal_period_pairs,PORTF_VALUE_CLOSE].values.T
-top_3_idx = np.argsort(portf_value_close)[-3:]
+#signal_period_pairs = [tuple([x,last_period]) for x in signals_names]
+last_portf_value = np.array(last_portf_value)
+top_3_idx = np.argsort(last_portf_value)[-3:]
 
 print("\nBenchmark value: " + str(signals['bm_value_close'].loc[last_period]))
 
@@ -254,7 +259,7 @@ for i in range(len(top_3_idx)):
 
     idx = top_3_idx[i]
 
-    print("Portfolio value MA(" + str(window_short[idx]) + "," + str(window_long[idx]) + "): " + str(multiindex_df.loc['signals_' + str(idx),].portf_value_close[-1]))
+    print("Portfolio value MA(" + str(window_short[idx]) + "," + str(window_long[idx]) + "): " + str(last_portf_value[idx]))
 
     plt.plot(multiindex_df.loc['signals_' + str(idx),].index,
              multiindex_df.loc['signals_' + str(idx),].portf_value_close,
