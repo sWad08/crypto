@@ -12,10 +12,11 @@ register_matplotlib_converters()
 
 reinv_ratio = 0.98
 trade_fee_rate = 0.00075
+slippage_factor = 0.05
 end_date = None #pd.Timestamp('2019-02-01') #15000
 end = -1
 
-window_list = [1,2,5,8,13,21,34,55]
+window_list = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55]
 
 window_short = []
 window_long = []
@@ -35,7 +36,7 @@ print()
 #window_long = [20]
 
 # Define start date for backtesting
-start_date = pd.Timestamp('2017-09-01')
+start_date = pd.Timestamp('2017-10-01')
 
 # Set initial capital for backtesting
 initial_capital = float(3000.0)
@@ -43,6 +44,9 @@ initial_asset_qty = 0.0
 
 TRIGGER = 'trigger'
 REINV_VALUE = 'reinv_value'
+SLIPPAGE_RANGE = 'slippage_range'
+SLIPPAGE_FACTOR = 'slippage_factor'
+SLIPPAGE = 'slippage'
 TRADE_PRICE = 'trade_price'
 TRADE_QTY = 'trade_qty'
 TRADE_VALUE_NET = 'trade_value_net'
@@ -57,17 +61,19 @@ CASH_VALUE_CLOSE = 'cash_value_close'
 PORTF_VALUE_OPEN = 'portf_value_open'
 PORTF_VALUE_CLOSE = 'portf_value_close'
 ASSET_PRICE_OPEN = 'asset_price_open'
+ASSET_PRICE_HIGH = 'asset_price_high'
+ASSET_PRICE_LOW = 'asset_price_low'
 ASSET_PRICE_CLOSE = 'asset_price_close'
 
-# Define API key and secret as variables
-api_key = api_key_1['api_key']
-api_secret = api_key_1['api_secret']
-
-# Create client for exchange package
-client = Client(api_key, api_secret)
-
+# # Define API key and secret as variables
+# api_key = api_key_1['api_key']
+# api_secret = api_key_1['api_secret']
+#
+# # Create client for exchange package
+# client = Client(api_key, api_secret)
+#
 # # Get historical data from exchange
-# klines = client.get_historical_klines("BTCUSDT", Client.KLINE_INTERVAL_1HOUR, "1 Dec, 2018", "1 Jul, 2019")
+# klines = client.get_historical_klines("BTCUSDT", Client.KLINE_INTERVAL_1HOUR, "17 Aug, 2017", "1 Jul, 2019")
 # columns = [
 #     "Open time",
 #     "Open",
@@ -102,8 +108,10 @@ elif end is not None:
 # Initialize a DataFrame for signals
 signals = pd.DataFrame(index=inputs.index)
 
-# Load open and close prices from inputs
+# Load price data from inputs
 signals[ASSET_PRICE_OPEN] = inputs['Open']
+signals[ASSET_PRICE_HIGH] = inputs['High']
+signals[ASSET_PRICE_LOW] = inputs['Low']
 signals[ASSET_PRICE_CLOSE] = inputs['Close']
 
 for i in range(len(window_short)):
@@ -132,10 +140,15 @@ for i in range(len(window_short)):
     signal_df = pd.DataFrame()
     signal_df['bm_value_close'] = signals['bm_value_close']
     signal_df[ASSET_PRICE_OPEN] = signals[ASSET_PRICE_OPEN]
+    signal_df[ASSET_PRICE_HIGH] = signals[ASSET_PRICE_HIGH]
+    signal_df[ASSET_PRICE_LOW] = signals[ASSET_PRICE_LOW]
     signal_df[ASSET_PRICE_CLOSE] = signals[ASSET_PRICE_CLOSE]
     signal_df[TRIGGER] = signals[TRIGGER + '_' + str(i)]
     # Preload columns necessary for portfolio value calculation
-    signal_df[TRADE_PRICE] = signal_df[ASSET_PRICE_OPEN]
+    signal_df[SLIPPAGE_RANGE] = np.nan
+    signal_df[SLIPPAGE_FACTOR] = slippage_factor
+    signal_df[SLIPPAGE] = np.nan
+    signal_df[TRADE_PRICE] = np.nan
     signal_df[REINV_VALUE] = np.nan
     signal_df[TRADE_QTY] = np.nan
     signal_df[TRADE_VALUE_NET] = np.nan
@@ -162,17 +175,19 @@ for i in range(len(window_short)):
 signals_names = tuple(['signals_' + str(x) for x in range(len(signals_list))])
 multiindex_df = pd.concat(signals_list, keys=signals_names)
 
-# NEXT STEP: iterate over specific parts of the DataFrame to carry out specific calculations
+# Iterate over specific parts of the DataFrame to carry out specific calculations
 # (e.g.: open values are equal to the close values of the previous period)
+
+# Create lists to distinguish between open and close figures
 open_list = [ASSET_QTY_OPEN, ASSET_VALUE_OPEN, CASH_VALUE_OPEN, PORTF_VALUE_OPEN]
 close_list = [ASSET_QTY_CLOSE, ASSET_VALUE_CLOSE, CASH_VALUE_CLOSE, PORTF_VALUE_CLOSE]
 
-# lets calculate the combined trigger dates list (any date when any of the signals trigger)
+# Calculate the combined trigger dates list (any date when any of the signals triggered)
 signals['trigger_SUM'] = 0.0
 for i in range(len(window_short)):
-    signals['trigger_SUM'] = signals['trigger_SUM']+ signals['trigger_' + str(i)].abs()
+    signals['trigger_SUM'] = signals['trigger_SUM'] + signals['trigger_' + str(i)].abs()
 trigger_dates = signals[signals['trigger_SUM'] != 0.0].index
-print("Processing total of " + str(len(trigger_dates)) + " number of trigger dates")
+print("Getting ready to process a total of " + str(len(trigger_dates)) + " trigger dates")
 
 counter = 0
 prev_trigger_date = signals.index[0]
@@ -183,25 +198,40 @@ for period in trigger_dates:
     # Read values from sub-DataFrame (and assign them to variables)
     # by converting the numpy array from .values[0] into a list
     signal_prev_period_pairs = [tuple([x, prev_trigger_date]) for x in signals_names]
-    signal_period_pairs = [tuple([x,period]) for x in signals_names]
-    asset_qty_open, asset_value_open,cash_value_open, portf_value_open = list(multiindex_df.loc[signal_prev_period_pairs,close_list].values.T)
+    signal_period_pairs = [tuple([x, period]) for x in signals_names]
+    asset_qty_open, asset_value_open, cash_value_open, portf_value_open = list(multiindex_df.loc[signal_prev_period_pairs, close_list].values.T)
 
-    asset_price_open, asset_price_close, trigger = \
-        list(multiindex_df.loc[signal_period_pairs, [ASSET_PRICE_OPEN, ASSET_PRICE_CLOSE, 'trigger']].values.T)
+    asset_price_open, asset_price_high, asset_price_low, asset_price_close, trigger, slippage_factor = \
+        list(multiindex_df.loc[signal_period_pairs, [ASSET_PRICE_OPEN, ASSET_PRICE_HIGH, ASSET_PRICE_LOW, ASSET_PRICE_CLOSE, 'trigger', SLIPPAGE_FACTOR]].values.T)
 
-    trade_price = asset_price_open
     reinv_value = reinv_ratio * cash_value_open
 
+    slippage_range = np.ndarray(len(trigger))
+    slippage = np.ndarray(len(trigger))
     trade_qty = np.ndarray(len(trigger))
+    trade_price = np.ndarray(len(trigger))
+
     for i in range(len(trigger)):
         if np.isnan(trigger[i]):
+            slippage_range[i] = 0.0
+            slippage[i] = 0.0
             trade_qty[i] = 0.0
+            trade_price[i] = 0.0
         elif trigger[i] == 1.0:
-            trade_qty[i] = reinv_value[i] / trade_price[i]
+            slippage_range[i] = asset_price_high[i] - asset_price_open[i]
+            slippage[i] = slippage_range[i] * slippage_factor[i]
+            trade_qty[i] = reinv_value[i] / asset_price_open[i]
+            trade_price[i] = asset_price_open[i] + slippage[i]
         elif trigger[i] == -1.0:
+            slippage_range[i] = asset_price_open[i] - asset_price_low[i]
+            slippage[i] = -slippage_range[i] * slippage_factor[i]
             trade_qty[i] = asset_qty_open[i] * trigger[i]
+            trade_price[i] = asset_price_open[i] + slippage[i]
         else:
+            slippage_range[i] = 0.0
+            slippage[i] = 0.0
             trade_qty[i] = 0.0
+            trade_price[i] = 0.0
 
     trade_value_net = trade_price * trade_qty
     trade_fee = trade_fee_rate * trade_value_net
@@ -212,10 +242,10 @@ for period in trigger_dates:
     portf_value_close = asset_value_close + cash_value_close
 
     # Assign values into DataFrame (.loc is a sub DataFrame) via np.array (from a list)
-    multiindex_df.loc[signal_period_pairs, open_list + close_list + [REINV_VALUE] + [TRADE_QTY] + [TRADE_VALUE_NET] + [TRADE_FEE] + [TRADE_VALUE_GROSS]] = \
+    multiindex_df.loc[signal_period_pairs, open_list + close_list + [REINV_VALUE] + [SLIPPAGE_RANGE] + [SLIPPAGE] + [TRADE_PRICE] + [TRADE_QTY] + [TRADE_VALUE_NET] + [TRADE_FEE] + [TRADE_VALUE_GROSS]] = \
         np.array([asset_qty_open, asset_value_open, cash_value_open, portf_value_open,
                   asset_qty_close, asset_value_close, cash_value_close, portf_value_close,
-                  reinv_value, trade_qty, trade_value_net, trade_fee, trade_value_gross]).T
+                  reinv_value, slippage_range, slippage, trade_price, trade_qty, trade_value_net, trade_fee, trade_value_gross]).T
     prev_trigger_date = period
     if counter % 100 == 0:
         print("Processed " + str(counter) + " trigger dates")
