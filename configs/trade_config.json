@@ -1,19 +1,23 @@
 {
     "ASSET": [
-        "SALT",
-        "ETH"
+        "LTC",
+        "XZC",
+		"KNC"
     ],
     "QUANTITY": [
-        400,
-        0.8
+        19,
+        420,
+		14000
     ],
     "SYMBOL": [
-        "SALTBTC",
-        "ETHBTC"
+        "LTCBTC",
+        "XZCBTC",
+		"KNCBTC"
     ],
     "TARGETPRICE": [
-        0.000332,
-        0.04475
+        0.011674,
+        0.001095,
+		0.00002192
     ],
     "_comment": "Trade specific configs are stored here"
 }
