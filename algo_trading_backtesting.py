@@ -13,6 +13,9 @@ register_matplotlib_converters()
 # Define label name constants
 TRIGGER = 'trigger'
 REINV_VALUE = 'reinv_value'
+SLIPPAGE_RANGE = 'slippage_range'
+SLIPPAGE_FACTOR = 'slippage_factor'
+SLIPPAGE = 'slippage'
 TRADE_PRICE = 'trade_price'
 TRADE_QTY = 'trade_qty'
 TRADE_VALUE_NET = 'trade_value_net'
@@ -27,6 +30,8 @@ CASH_VALUE_CLOSE = 'cash_value_close'
 PORTF_VALUE_OPEN = 'portf_value_open'
 PORTF_VALUE_CLOSE = 'portf_value_close'
 ASSET_PRICE_OPEN = 'asset_price_open'
+ASSET_PRICE_HIGH = 'asset_price_high'
+ASSET_PRICE_LOW = 'asset_price_low'
 ASSET_PRICE_CLOSE = 'asset_price_close'
 
 # Set initial capital for backtesting
@@ -34,15 +39,16 @@ initial_capital = float(3000.0)
 initial_asset_qty = 0.0
 reinv_ratio = 0.98
 trade_fee_rate = 0.00075
+slippage_factor = 0.05
 
 # Define start date for backtesting
 start_date = pd.Timestamp('2017-10-01') #pd.Timestamp('2017-09-01')
 # Define end date for backtesting
-end_date = pd.Timestamp('2019-06-30') #15000 None
+end_date = pd.Timestamp('2019-07-01') #15000 None
 end = None #-1
 
 # define list of windows we would want to create a combination from
-window_list = [1,2,5,8,13,21,34,55]#list(range(1, 55)) #[1,2,5,8,13,21,34,55]#
+window_list = [5,10,20,40]#list(range(1, 55)) #[1,2,5,8,13,21,34,55]#
 
 window_short = []
 window_long = []
@@ -58,13 +64,13 @@ for short in window_list:
 #window_short = [10]
 #window_long = [20]
 
-# Define API key and secret as variables
-api_key = api_key_1['api_key']
-api_secret = api_key_1['api_secret']
-
-# Create client for exchange package
-client = Client(api_key, api_secret)
-
+# # Define API key and secret as variables
+# api_key = api_key_1['api_key']
+# api_secret = api_key_1['api_secret']
+#
+# # Create client for exchange package
+# client = Client(api_key, api_secret)
+#
 # # Get historical data from exchange
 # klines = client.get_historical_klines("BTCUSDT", Client.KLINE_INTERVAL_1HOUR, "1 Dec, 2018", "1 Jul, 2019")
 # columns = [
@@ -103,6 +109,8 @@ signals = pd.DataFrame(index=inputs.index)
 
 # Load open and close prices from inputs
 signals[ASSET_PRICE_OPEN] = inputs['Open']
+signals[ASSET_PRICE_HIGH] = inputs['High']
+signals[ASSET_PRICE_LOW] = inputs['Low']
 signals[ASSET_PRICE_CLOSE] = inputs['Close']
 
 print("Working on " + str(len(window_short)) + " triggers...")
@@ -140,9 +148,14 @@ for i in range(len(window_short)):
     signal_df = pd.DataFrame()
     signal_df['bm_value_close'] = signals['bm_value_close']
     signal_df[ASSET_PRICE_OPEN] = signals[ASSET_PRICE_OPEN]
+    signal_df[ASSET_PRICE_HIGH] = signals[ASSET_PRICE_HIGH]
+    signal_df[ASSET_PRICE_LOW] = signals[ASSET_PRICE_LOW]
     signal_df[ASSET_PRICE_CLOSE] = signals[ASSET_PRICE_CLOSE]
     signal_df[TRIGGER] = trigger_list[i]
     # Preload columns necessary for portfolio value calculation
+    signal_df[SLIPPAGE_RANGE] = np.nan
+    signal_df[SLIPPAGE_FACTOR] = slippage_factor
+    signal_df[SLIPPAGE] = np.nan
     signal_df[TRADE_PRICE] = signal_df[ASSET_PRICE_OPEN]
     signal_df[REINV_VALUE] = np.nan
     signal_df[TRADE_QTY] = np.nan
@@ -175,10 +188,11 @@ for i in range(len(window_short)):
 
     # taking the working dataset into a numpy matrix (set of arrays/vectors)
     # order is important as we will refer to them by that
-    field_list = [TRIGGER,          ASSET_PRICE_OPEN,   ASSET_PRICE_CLOSE,  TRADE_PRICE,
-                  REINV_VALUE,      TRADE_QTY,          TRADE_VALUE_NET,    TRADE_VALUE_GROSS,  TRADE_FEE,
-                  ASSET_QTY_OPEN,   ASSET_VALUE_OPEN,   CASH_VALUE_OPEN,    PORTF_VALUE_OPEN,
-                  ASSET_QTY_CLOSE,  ASSET_VALUE_CLOSE,  CASH_VALUE_CLOSE,   PORTF_VALUE_CLOSE]
+    field_list = [TRIGGER,          ASSET_PRICE_OPEN,   ASSET_PRICE_HIGH,   ASSET_PRICE_LOW,    ASSET_PRICE_CLOSE,
+                  SLIPPAGE_RANGE,   SLIPPAGE,           TRADE_PRICE,        REINV_VALUE,        TRADE_QTY,
+                  TRADE_VALUE_NET,  TRADE_VALUE_GROSS,  TRADE_FEE,          ASSET_QTY_OPEN,     ASSET_VALUE_OPEN,
+                  CASH_VALUE_OPEN,  PORTF_VALUE_OPEN,   ASSET_QTY_CLOSE,    ASSET_VALUE_CLOSE,  CASH_VALUE_CLOSE,
+                  PORTF_VALUE_CLOSE]
 
     data = triggered_df[field_list].values
     starting_open_values = signal_df[close_list].iloc[0].values
@@ -193,21 +207,32 @@ for i in range(len(window_short)):
         if i == 0:
             asset_qty_open, asset_value_open, cash_value_open, portf_value_open = list(starting_open_values)
         else:
-            asset_qty_open, asset_value_open, cash_value_open, portf_value_open = list(data[i-1,13:17]) #take the close list
+            asset_qty_open, asset_value_open, cash_value_open, portf_value_open = list(data[i-1,17:21]) #take the close list
 
-        trigger, asset_price_open, asset_price_close = list(data[i,0:3])
+        trigger, asset_price_open, asset_price_high, asset_price_low, asset_price_close = list(data[i,0:5])
 
-        trade_price = asset_price_open
         reinv_value = reinv_ratio * cash_value_open
 
         if np.isnan(trigger):
+            slippage_range = 0.0
+            slippage = 0.0
             trade_qty = 0.0
+            trade_price = 0.0
         elif trigger == 1.0:
-            trade_qty = reinv_value / trade_price
+            slippage_range = asset_price_high - asset_price_open
+            slippage = slippage_range * slippage_factor
+            trade_qty = reinv_value / asset_price_open
+            trade_price = asset_price_open + slippage
         elif trigger == -1.0:
+            slippage_range = asset_price_open - asset_price_low
+            slippage = -slippage_range * slippage_factor
             trade_qty = asset_qty_open * trigger
+            trade_price = asset_price_open + slippage
         else:
+            slippage_range = 0.0
+            slippage = 0.0
             trade_qty = 0.0
+            trade_price = 0.0
 
         trade_value_net = trade_price * trade_qty
         trade_fee = trade_fee_rate * trade_value_net
@@ -218,13 +243,26 @@ for i in range(len(window_short)):
         portf_value_close = asset_value_close + cash_value_close
 
         # Assign values into the data MATRIX
-        data[i,3:17] = np.array([trade_price, reinv_value, trade_qty, trade_value_net, trade_value_gross, trade_fee,
-                                 asset_qty_open, asset_value_open, cash_value_open, portf_value_open,
-                                 asset_qty_close, asset_value_close, cash_value_close, portf_value_close
+        data[i,5:21] = np.array([slippage_range,
+                                 slippage,
+                                 trade_price,
+                                 reinv_value,
+                                 trade_qty,
+                                 trade_value_net,
+                                 trade_value_gross,
+                                 trade_fee,
+                                 asset_qty_open,
+                                 asset_value_open,
+                                 cash_value_open,
+                                 portf_value_open,
+                                 asset_qty_close,
+                                 asset_value_close,
+                                 cash_value_close,
+                                 portf_value_close
                                  ])
 
     # writing back data into full dataframe
-    signal_df.loc[signal_df[TRIGGER] != 0.0,field_list] = data
+    signal_df.loc[signal_df[TRIGGER] != 0.0, field_list] = data
     signals_list.append(signal_df)
     last_portf_value.append(portf_value_close)
 
